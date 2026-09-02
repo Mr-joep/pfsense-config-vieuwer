@@ -1,0 +1,10 @@
+# Uploaded pfSense backups contain private keys and passwords.
+# They are read server-side by index.php and must never be served directly.
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
