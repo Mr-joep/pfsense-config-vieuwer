@@ -4,47 +4,40 @@
  */
 class Loader
 {
+    /** Display name: the original filename, minus the random storage prefix. */
+    public static function label(string $path): string
+    {
+        $name = basename($path);
+        return preg_replace('~^[0-9a-f]{8}-~', '', $name) ?? $name;
+    }
+
     /** Directory uploads land in. */
     public static function uploadDir(): string
     {
         return __DIR__ . '/../uploads';
     }
 
-    /** Extra directory scanned for pre-existing configs (the htdocs root). */
-    public static function scanDir(): string
-    {
-        return realpath(__DIR__ . '/../..') ?: (__DIR__ . '/../..');
-    }
 
     /**
-     * Every config file we can offer, newest first.
-     * @return array<int,array{path:string,name:string,hostname:string,revision:?int,size:int,source:string}>
+     * Every uploaded config, newest first.
+     * @return array<int,array{path:string,name:string,label:string,hostname:string,revision:?int,size:int}>
      */
     public static function listConfigs(): array
     {
-        $found = [];
-
-        foreach (glob(self::uploadDir() . '/*.xml') ?: [] as $p) {
-            $found[] = ['path' => $p, 'source' => 'upload'];
-        }
-        foreach (glob(self::scanDir() . '/config*.xml') ?: [] as $p) {
-            $found[] = ['path' => $p, 'source' => 'htdocs'];
-        }
-
         $out = [];
-        foreach ($found as $f) {
-            $meta = self::peek($f['path']);
+        foreach (glob(self::uploadDir() . '/*.xml') ?: [] as $path) {
+            $meta = self::peek($path);
             if ($meta === null) {
                 continue; // not a pfSense config
             }
             $out[] = [
-                'path'     => $f['path'],
-                'name'     => basename($f['path']),
-                'source'   => $f['source'],
+                'path'     => $path,
+                'name'     => basename($path),
+                'label'    => self::label($path),
                 'hostname' => $meta['hostname'],
                 'version'  => $meta['version'],
                 'revision' => $meta['revision'],
-                'size'     => filesize($f['path']) ?: 0,
+                'size'     => filesize($path) ?: 0,
             ];
         }
 
@@ -157,16 +150,12 @@ class Loader
         return ['xml' => $xml, 'rrd' => $rrd];
     }
 
-    /** Only files inside the upload dir or the scan dir may be opened. */
+    /** Only files inside the upload dir may be opened. */
     public static function inAllowedDir(string $realPath): bool
     {
-        foreach ([self::uploadDir(), self::scanDir()] as $dir) {
-            $d = realpath($dir);
-            if ($d !== false && strncmp($realPath, $d . DIRECTORY_SEPARATOR, strlen($d) + 1) === 0) {
-                return true;
-            }
-        }
-        return false;
+        $d = realpath(self::uploadDir());
+        return $d !== false
+            && strncmp($realPath, $d . DIRECTORY_SEPARATOR, strlen($d) + 1) === 0;
     }
 
     public const MAX_UPLOAD = 20 * 1024 * 1024;
